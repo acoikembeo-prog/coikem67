@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Battle Royale 4K Ultra - Valorant Style</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background: #0b0e14; color: #fff; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+
+        /* LOBBY UI */
+        #lobby { display: flex; flex-direction: column; justify-content: space-between; padding: 30px; background: radial-gradient(circle at center, rgba(15, 23, 42, 0.3) 0%, rgba(11, 14, 20, 0.9) 100%); }
+        .header { display: flex; justify-content: space-between; align-items: center; background: rgba(22, 32, 50, 0.85); padding: 15px 30px; border-radius: 8px; border-left: 6px solid #ff4655; box-shadow: 0 10px 25px rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
+        .user-info h2 { font-size: 24px; color: #ff4655; font-weight: 800; letter-spacing: 1px; }
+        .rank-badge { background: #1a2332; padding: 6px 16px; border-radius: 20px; font-weight: bold; color: #00f0ff; border: 1px solid #00f0ff; display: inline-block; margin-top: 5px; font-size: 14px; text-shadow: 0 0 8px rgba(0,240,255,0.5); }
+
+        .lobby-menu { display: flex; gap: 15px; }
+        .btn { background: #ff4655; border: none; color: white; padding: 12px 28px; font-weight: 700; cursor: pointer; border-radius: 4px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 4px 15px rgba(255,70,85,0.4); letter-spacing: 1px; }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.2); box-shadow: 0 6px 20px rgba(255,70,85,0.6); }
+        .btn-secondary { background: #1f2937; border: 1px solid #374151; box-shadow: none; }
+        .btn-secondary:hover { background: #374151; }
+
+        .start-section { align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: 15px; }
+        .btn-start { font-size: 28px; padding: 20px 70px; background: linear-gradient(135deg, #ff4655, #ff1a2d); border-radius: 4px; animation: pulse 1.5s infinite alternate; }
+
+        @keyframes pulse { from { transform: scale(1); box-shadow: 0 0 20px rgba(255,70,85,0.5); } to { transform: scale(1.04); box-shadow: 0 0 35px rgba(255,70,85,0.9); } }
+
+        /* MODALS */
+        .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); border: 2px solid #ff4655; width: 85%; height: 80%; border-radius: 8px; padding: 25px; flex-direction: column; z-index: 20; backdrop-filter: blur(15px); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        .modal-body { flex: 1; overflow-y: auto; padding: 20px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .card:hover { border-color: #ff4655; transform: translateY(-3px); }
+        .card.active { border-color: #00ff66; background: rgba(0,255,102,0.1); }
+
+        /* HUD IN-GAME */
+        #hud { display: none; }
+        .crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; transform: translate(-50%, -50%); pointer-events: none; }
+        .crosshair::before, .crosshair::after { content: ''; position: absolute; background: #00ff66; box-shadow: 0 0 6px #00ff66; }
+        .crosshair::before { top: 3px; left: -12px; width: 32px; height: 2px; }
+        .crosshair::after { top: -12px; left: 3px; width: 2px; height: 32px; }
+
+        .stats-bar { position: absolute; bottom: 30px; left: 30px; width: 340px; background: rgba(15, 23, 42, 0.85); padding: 18px; border-radius: 8px; border: 1px solid #334155; backdrop-filter: blur(8px); }
+        .bar { width: 100%; height: 14px; background: #0f172a; border-radius: 7px; overflow: hidden; margin-top: 6px; }
+        .bar-fill { height: 100%; width: 100%; background: #00ff66; transition: width 0.2s; }
+        .armor-bar { background: #00f0ff; }
+
+        .game-info { position: absolute; top: 20px; right: 20px; background: rgba(15, 23, 42, 0.85); padding: 18px; border-radius: 8px; text-align: right; border: 1px solid #334155; }
+        .zone-timer { color: #ff4655; font-weight: bold; font-size: 20px; }
+
+        #parachute-prompt { display: none; position: absolute; top: 75%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 800; background: rgba(15, 23, 42, 0.9); padding: 15px 35px; border-radius: 30px; border: 2px solid #ff4655; text-shadow: 0 0 10px #ff4655; }
+
+        #inventory-hud { position: absolute; bottom: 30px; right: 30px; background: rgba(15, 23, 42, 0.85); padding: 12px; border-radius: 8px; display: flex; gap: 12px; border: 1px solid #334155; }
+        .inv-slot { width: 90px; height: 75px; border: 1px solid #334155; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; text-align: center; background: rgba(255,255,255,0.03); font-weight: bold; }
+        .inv-slot.active { border-color: #ff4655; background: rgba(255,70,85,0.25); box-shadow: 0 0 10px rgba(255,70,85,0.5); }
+        .key-hint { color: #ff4655; font-size: 12px; font-weight: 900; }
+
+        .shoot-hint { position: absolute; bottom: 120px; right: 30px; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 4px; border-left: 4px solid #00ff66; font-size: 13px; }
+
+        /* GAME OVER OVERLAY */
+        #game-over { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 14, 20, 0.95); z-index: 100; flex-direction: column; justify-content: center; align-items: center; }
+        #game-over h1 { font-size: 64px; color: #ff4655; margin-bottom: 15px; letter-spacing: 2px; text-shadow: 0 0 20px rgba(255,70,85,0.6); }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- LOBBY UI -->
+    <div id="lobby" class="ui-layer interactive">
+        <div class="header">
+            <div class="user-info">
+                <h2 id="player-name">VALORANT_AGENT</h2>
+                <div class="rank-badge" id="rank-display">Đồng 1 (0/3 Thắng)</div>
+            </div>
+            <div class="lobby-menu">
+                <button class="btn btn-secondary" onclick="openModal('events-modal')">Sự Kiện</button>
+                <button class="btn btn-secondary" onclick="openModal('shop-modal')">Súng & Skin (70+)</button>
+                <button class="btn btn-secondary" onclick="openModal('outfit-modal')">Trang Phục</button>
+            </div>
+        </div>
+
+        <div class="start-section">
+            <div style="background: rgba(15, 23, 42, 0.85); padding: 12px 24px; border-radius: 6px; border: 1px solid #334155;">
+                <label style="font-weight: bold; color: #94a3b8;">Chế độ: </label>
+                <select id="mode-select" style="background:#0f172a; color:#fff; padding:6px 12px; border:1px solid #334155; border-radius:4px; font-weight:bold;">
+                    <option value="ranked">Xếp Hạng Battle Royale (30 người)</option>
+                    <option value="casual">Đấu Thường (Sinh tồn)</option>
+                </select>
+            </div>
+            <button class="btn btn-start" onclick="startGame()">VÀO TRẬN</button>
+        </div>
+    </div>
+
+    <!-- MODAL SỰ KIỆN -->
+    <div id="events-modal" class="modal interactive">
+        <div class="modal-header">
+            <h3>Sự Kiện Đặc Biệt</h3>
+            <button class="btn btn-secondary" onclick="closeModal('events-modal')">Đóng</button>
+        </div>
+        <div class="modal-body">
+            <div class="card">
+                <h4 style="color: #ff4655;">Đăng Nhập Nhận Skin</h4>
+                <p style="color: #94a3b8; font-size: 13px; margin-top: 5px;">Nhận ngay skin Vandal Rồng Lửa khi đăng nhập đủ 7 ngày!</p>
+            </div>
+            <div class="card">
+                <h4 style="color: #ff4655;">Đua Top Rank Cao Thủ</h4>
+                <p style="color: #94a3b8; font-size: 13px; margin-top: 5px;">Đạt hạng Cao Thủ để sở hữu trang phục Hoàng Gia 4K.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SKIN SÚNG -->
+    <div id="shop-modal" class="modal interactive">
+        <div class="modal-header">
+            <h3>Kho Súng & Skin (70+ Loại Vũ Khí)</h3>
+            <button class="btn btn-secondary" onclick="closeModal('shop-modal')">Đóng</button>
+        </div>
+        <div class="modal-body" id="weapon-list"></div>
+    </div>
+
+    <!-- MODAL TRANG PHỤC -->
+    <div id="outfit-modal" class="modal interactive">
+        <div class="modal-header">
+            <h3>Tủ Đồ Nhân Vật</h3>
+            <button class="btn btn-secondary" onclick="closeModal('outfit-modal')">Đóng</button>
+        </div>
+        <div class="modal-body">
+            <div class="card active" onclick="selectOutfit('Mặc Định', 0xff4655)">
+                <h4 style="color: #ff4655;">Đặc Nhiệm Đỏ</h4>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Bộ giáp đặc nhiệm Valorant tiêu chuẩn</p>
+            </div>
+            <div class="card" onclick="selectOutfit('Băng Giá', 0x00f0ff)">
+                <h4 style="color: #00f0ff;">Chiến Binh Băng Giá</h4>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Bộ trang phục phủ tinh thể băng 3D</p>
+            </div>
+            <div class="card" onclick="selectOutfit('Hoàng Gia', 0xffd700)">
+                <h4 style="color: #ffd700;">Hoàng Gia Vàng</h4>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Bộ giáp mạ vàng rực rỡ</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD IN-GAME -->
+    <div id="hud" class="ui-layer">
+        <div class="crosshair"></div>
+        
+        <div class="stats-bar">
+            <div style="font-weight: 800; font-size: 14px;">MÁU: <span id="hp-text" style="color:#00ff66;">300</span>/300</div>
+            <div class="bar"><div id="hp-fill" class="bar-fill"></div></div>
+            <div style="margin-top: 10px; font-weight: 800; font-size: 14px;">GIÁP: <span id="armor-text" style="color:#00f0ff;">Không</span></div>
+            <div class="bar"><div id="armor-fill" class="bar-fill armor-bar" style="width: 0%;"></div></div>
+        </div>
+
+        <div class="game-info">
+            <div style="font-weight: 800;">Sống sót: <span id="alive-count" style="color:#00ff66; font-size:22px;">30</span> / 30</div>
+            <div class="zone-timer">Bo thu hẹp: <span id="zone-timer-text">30</span>s</div>
+            <div style="margin-top: 4px; font-size: 12px; color: #94a3b8;">Vòng an toàn đợt 1</div>
+        </div>
+
+        <div id="parachute-prompt">BẤM [E] ĐỂ NHẢY DÙ</div>
+
+        <div class="shoot-hint">Bấm <b style="color:#ff4655;">[G]</b> hoặc <b style="color:#ff4655;">Click Chuột</b> để BẮN</div>
+
+        <div id="inventory-hud">
+            <div class="inv-slot" id="slot-u"><span class="key-hint">[U]</span>Súng Chính<br><span id="name-u">M4A1</span></div>
+            <div class="inv-slot" id="slot-i"><span class="key-hint">[I]</span>Súng Phụ<br><span id="name-i">USP</span></div>
+            <div class="inv-slot active" id="slot-k"><span class="key-hint">[K]</span>Cận Chiến<br><span id="name-k">Tay Đấm</span></div>
+        </div>
+    </div>
+
+    <!-- GAME OVER OVERLAY -->
+    <div id="game-over" class="interactive">
+        <h1 id="game-over-title">BOOYAH! #1</h1>
+        <p id="game-over-desc" style="font-size: 20px; margin-bottom: 25px; color: #94a3b8;">Bạn đã trở thành người sống sót cuối cùng!</p>
+        <button class="btn btn-start" onclick="returnToLobby()">VỀ SẢNH CHỜ</button>
+    </div>
+
+    <!-- THREE.JS LIBRARY -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        /* ==================== QUY ĐỊNH HỆ THỐNG RANK ==================== */
+        const RANKS = [
+            { name: "Đồng 1", winsNeeded: 3 },
+            { name: "Đồng 2", winsNeeded: 5 },
+            { name: "Bạc 1", winsNeeded: 7 },
+            { name: "Bạc 2", winsNeeded: 9 },
+            { name: "Vàng 1", winsNeeded: 11 },
+            { name: "Vàng 2", winsNeeded: 13 },
+            { name: "Kim Cương 1", winsNeeded: 15 },
+            { name: "Kim Cương 2", winsNeeded: 20 },
+            { name: "Cao Thủ", winsNeeded: Infinity }
+        ];
+
+        let playerData = {
+            rankIndex: 0,
+            currentWins: 0,
+            selectedOutfit: "Mặc Định",
+            outfitColor: 0xff4655
+        };
+
+        /* ==================== TẠO KHO 70+ LOẠI VŨ KHÍ & SKIN ==================== */
+        const WEAPON_TYPES = ['Súng trường', 'Súng tiểu liên', 'Súng bắn tỉa', 'Súng lục', 'Vũ khí cận chiến'];
+        const WEAPONS_DB = [];
+        const weaponNames = ["M4A1", "AK47", "SCAR", "GROZA", "VANDAL", "PHANTOM", "MP5", "UMP45", "MP40", "AWM", "KAR98K", "M24", "OP", "USP", "DESERT EAGLE", "GHOST", "DAO VIP", "RÌU CHIẾN", "TAY ĐẤM", "PAN", "BAT"];
+
+        let idCounter = 1;
+        for (let i = 0; i < 75; i++) {
+            let cat = WEAPON_TYPES[i % WEAPON_TYPES.length];
+            let baseName = weaponNames[i % weaponNames.length] + " Mk-" + (Math.floor(i / weaponNames.length) + 1);
+            if (i === 74) baseName = "Tay Đấm Mặc Định";
+
+            let skinCount = Math.floor(Math.random() * 8) + 3;
+            let skins = [];
+            for (let s = 1; s <= skinCount; s++) {
+                skins.push({
+                    name: `Skin ${s}: ` + ["Rồng Lửa", "Sấm Sét", "Băng Giá", "Mạ Vàng", "Độc Tiên", "Sát Thủ"][s % 6],
+                    dmgBonus: Math.floor(Math.random() * 10) + 2
+                });
+            }
+
+            WEAPONS_DB.push({
+                id: idCounter++,
+                name: baseName,
+                category: cat,
+                damage: cat === 'Súng bắn tỉa' ? 140 : (cat === 'Vũ khí cận chiến' ? 60 : 35 + Math.floor(Math.random()*15)),
+                range: cat === 'Vũ khí cận chiến' ? 5 : (cat === 'Súng bắn tỉa' ? 400 : 150),
+                skins: skins
+            });
+        }
+
+        /* ==================== MÔ HÌNH NHÂN VẬT & VŨ KHÍ FPS 3D ==================== */
+        function createHumanoidModel(colorHex) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.2 });
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+
+            // Thân
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.4), mat);
+            torso.position.y = 1.25;
+            group.add(torso);
+
+            // Đầu
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), skinMat);
+            head.position.y = 1.9;
+            group.add(head);
+
+            // Tay Trái & Tay Phải
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.7);
+            const leftArm = new THREE.Mesh(armGeo, mat);
+            leftArm.position.set(-0.4, 1.25, 0);
+            group.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeo, mat);
+            rightArm.position.set(0.4, 1.25, 0);
+            group.add(rightArm);
+
+            // Chân Trái & Chân Phải
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.8);
+            const leftLeg = new THREE.Mesh(legGeo, mat);
+            leftLeg.position.set(-0.18, 0.4, 0);
+            group.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, mat);
+            rightLeg.position.set(0.18, 0.4, 0);
+            group.add(rightLeg);
+
+            return group;
+        }
+
+        function createFPSGunMesh(type) {
+            const gunGroup = new THREE.Group();
+            if (type === 'K') {
+                // Tay Đấm / Melee
+                const fist = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.3), new THREE.MeshStandardMaterial({ color: 0xffcc99 }));
+                fist.position.set(0.3, -0.2, -0.5);
+                gunGroup.add(fist);
+            } else {
+                // Súng FPS trên tay
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.7), new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 }));
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5), new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9 }));
+                barrel.rotation.x = Math.PI / 2;
+                barrel.position.set(0, 0.04, -0.5);
+                
+                const skinDetail = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.3), new THREE.MeshStandardMaterial({ color: type === 'U' ? 0xff4655 : 0x00f0ff, roughness: 0.1 }));
+                skinDetail.position.set(0, 0.05, -0.1);
+
+                gunGroup.add(body, barrel, skinDetail);
+                gunGroup.position.set(0.25, -0.25, -0.5);
+            }
+            return gunGroup;
+        }
+
+        /* ==================== GRAPHICS & THREE.JS ENGINE ==================== */
+        let scene, camera, renderer;
+        let isGameRunning = false, isParachuting = false, isLanded = false;
+        let playerObj, currentGunMesh = null;
+        let keys = {};
+
+        let currentEquippedSlot = 'K';
+        let playerHP = 300;
+        let armorLevel = 0;
+        const ARMOR_REDUCTION = [0, 0.10, 0.20, 0.23, 0.26];
+        let alivePlayers = 30;
+        let zoneSize = 800;
+        let zoneTimer = 30;
+        let zoneInterval;
+        let bots = [];
+        let itemsOnGround = [];
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x68d8d6);
+            scene.fog = new THREE.FogExp2(0x68d8d6, 0.0008);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            createLobbyScene();
+
+            window.addEventListener('resize', onWindowResize);
+            setupControls();
+            animate();
+        }
+
+        function createLobbyScene() {
+            while(scene.children.length > 0){ scene.remove(scene.children[0]); }
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 30),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.5 })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const char3D = createHumanoidModel(playerData.outfitColor);
+            scene.add(char3D);
+
+            camera.position.set(0, 1.5, 3.5);
+            camera.lookAt(0, 1.2, 0);
+        }
+
+        function buildBattleMap() {
+            while(scene.children.length > 0){ scene.remove(scene.children[0]); }
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfff5ea, 1.0);
+            dirLight.position.set(200, 400, 200);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Mặt đất 800m x 800m
+            const terrain = new THREE.Mesh(
+                new THREE.PlaneGeometry(800, 800),
+                new THREE.MeshStandardMaterial({ color: 0x477023, roughness: 0.9 })
+            );
+            terrain.rotation.x = -Math.PI / 2;
+            scene.add(terrain);
+
+            // Cây 3D
+            const treeTrunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 4);
+            const treeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
+            const treeLeavesGeo = new THREE.ConeGeometry(3, 7, 8);
+            const treeLeavesMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57 });
+
+            for(let i=0; i<300; i++) {
+                const treeGroup = new THREE.Group();
+                const trunk = new THREE.Mesh(treeTrunkGeo, treeTrunkMat);
+                trunk.position.y = 2;
+                const leaves = new THREE.Mesh(treeLeavesGeo, treeLeavesMat);
+                leaves.position.y = 5.5;
+                treeGroup.add(trunk, leaves);
+                treeGroup.position.set((Math.random()-0.5)*740, 0, (Math.random()-0.5)*740);
+                scene.add(treeGroup);
+            }
+
+            // Nhà ghép 3D
+            const houseWallMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+            const houseRoofMat = new THREE.MeshStandardMaterial({ color: 0xb22222 });
+
+            for(let i=0; i<60; i++) {
+                const houseGroup = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 10), houseWallMat);
+                body.position.y = 3;
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(9, 4, 4), houseRoofMat);
+                roof.position.y = 8;
+                roof.rotation.y = Math.PI / 4;
+                houseGroup.add(body, roof);
+                houseGroup.position.set((Math.random()-0.5)*700, 0, (Math.random()-0.5)*700);
+                scene.add(houseGroup);
+            }
+
+            // Vòng bo
+            const zoneGeo = new THREE.CylinderGeometry(400, 400, 300, 32, 1, true);
+            const zoneMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.4 });
+            window.zoneMesh = new THREE.Mesh(zoneGeo, zoneMat);
+            window.zoneMesh.position.set(0, 150, 0);
+            scene.add(window.zoneMesh);
+
+            spawnLootItems();
+        }
+
+        function spawnLootItems() {
+            itemsOnGround = [];
+            for (let i = 0; i < 150; i++) {
+                let rand = Math.random();
+                let type = rand < 0.3 ? 'armor' : (rand < 0.6 ? 'medkit' : 'gun');
+                
+                let itemMesh;
+                if (type === 'gun') {
+                    itemMesh = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.4), new THREE.MeshStandardMaterial({ color: 0xff4655, metalness: 0.5 }));
+                } else if (type === 'armor') {
+                    itemMesh = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.2 }));
+                } else {
+                    itemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0x00ff66 }));
+                }
+
+                itemMesh.position.set((Math.random() - 0.5) * 750, 0.5, (Math.random() - 0.5) * 750);
+                scene.add(itemMesh);
+
+                itemsOnGround.push({ mesh: itemMesh, type: type, level: Math.floor(Math.random() * 4) + 1 });
+            }
+        }
+
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                if (e.code === 'KeyE' && isParachuting) {
+                    isParachuting = false;
+                    document.getElementById('parachute-prompt').style.display = 'none';
+                }
+                if (isGameRunning) {
+                    if (e.code === 'KeyU') switchSlot('U');
+                    if (e.code === 'KeyI') switchSlot('I');
+                    if (e.code === 'KeyK') switchSlot('K');
+                    if (e.code === 'KeyG') shootWeapon(); // Bấm nút G để bắn
+                }
+            });
+
+            document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+            document.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === document.body && isGameRunning) {
+                    playerObj.rotation.y -= e.movementX * 0.002;
+                    camera.rotation.x -= e.movementY * 0.002;
+                    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                }
+            });
+
+            document.body.addEventListener('click', () => {
+                if (isGameRunning && document.pointerLockElement !== document.body) {
+                    document.body.requestPointerLock();
+                } else if (isGameRunning && isLanded) {
+                    shootWeapon();
+                }
+            });
+        }
+
+        function switchSlot(slot) {
+            currentEquippedSlot = slot;
+            document.querySelectorAll('.inv-slot').forEach(el => el.classList.remove('active'));
+            if (slot === 'U') document.getElementById('slot-u').classList.add('active');
+            if (slot === 'I') document.getElementById('slot-i').classList.add('active');
+            if (slot === 'K') document.getElementById('slot-k').classList.add('active');
+
+            // Cập nhật mô hình súng FPS nhìn từ góc nhìn thứ nhất
+            if (currentGunMesh) camera.remove(currentGunMesh);
+            currentGunMesh = createFPSGunMesh(slot);
+            camera.add(currentGunMesh);
+        }
+
+        function startGame() {
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+
+            isGameRunning = true;
+            isParachuting = true;
+            isLanded = false;
+            playerHP = 300;
+            armorLevel = 0;
+            alivePlayers = 30;
+            zoneSize = 800;
+            zoneTimer = 30;
+
+            buildBattleMap();
+
+            playerObj = new THREE.Group();
+            playerObj.position.set(0, 300, 0);
+            scene.add(playerObj);
+
+            camera.position.set(0, 0, 0);
+            playerObj.add(camera);
+
+            bots = [];
+            for (let i = 0; i < 29; i++) {
+                const botModel = createHumanoidModel(0x888888);
+                let bx = (Math.random() - 0.5) * 700;
+                let bz = (Math.random() - 0.5) * 700;
+                botModel.position.set(bx, 0, bz);
+                scene.add(botModel);
+
+                bots.push({
+                    mesh: botModel,
+                    hp: 300,
+                    alive: true,
+                    speed: 0.12 + Math.random() * 0.08 // Tốc độ bot chậm lại chuẩn yêu cầu
+                });
+            }
+
+            document.getElementById('parachute-prompt').style.display = 'block';
+            switchSlot('K');
+            startZoneTimer();
+            updateHUD();
+        }
+
+        function startZoneTimer() {
+            clearInterval(zoneInterval);
+            zoneInterval = setInterval(() => {
+                if (!isGameRunning) return;
+                zoneTimer--;
+                document.getElementById('zone-timer-text').innerText = zoneTimer;
+
+                if (zoneTimer <= 0) {
+                    zoneTimer = 30;
+                    zoneSize *= 0.75;
+                    if (window.zoneMesh) window.zoneMesh.scale.set(zoneSize / 800, 1, zoneSize / 800);
+                }
+
+                if (playerObj) {
+                    let dist = Math.sqrt(playerObj.position.x ** 2 + playerObj.position.z ** 2);
+                    if (dist > zoneSize / 2) {
+                        takeDamage(8);
+                    }
+                }
+            }, 1000);
+        }
+
+        function shootWeapon() {
+            // Hiệu ứng giật súng FPS nhẹ
+            if (currentGunMesh) {
+                currentGunMesh.position.z += 0.05;
+                setTimeout(() => { if (currentGunMesh) currentGunMesh.position.z -= 0.05; }, 50);
+            }
+
+            bots.forEach(bot => {
+                if (bot.alive) {
+                    let dist = playerObj.position.distanceTo(bot.mesh.position);
+                    let hitRange = currentEquippedSlot === 'K' ? 5 : 130;
+                    if (dist < hitRange && Math.random() < 0.75) {
+                        bot.hp -= (currentEquippedSlot === 'U' ? 75 : (currentEquippedSlot === 'I' ? 50 : 65));
+                        if (bot.hp <= 0) {
+                            bot.alive = false;
+                            bot.mesh.visible = false;
+                            alivePlayers--;
+                            document.getElementById('alive-count').innerText = alivePlayers;
+                            if (alivePlayers <= 1) endGame(true);
+                        }
+                    }
+                }
+            });
+        }
+
+        function takeDamage(dmg) {
+            let actualDmg = dmg * (1 - ARMOR_REDUCTION[armorLevel]);
+            playerHP -= actualDmg;
+            if (playerHP <= 0) {
+                playerHP = 0;
+                endGame(false);
+            }
+            updateHUD();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameRunning && playerObj) {
+                if (!isLanded) {
+                    playerObj.position.y -= isParachuting ? 0.9 : 2.8;
+                    if (playerObj.position.y <= 1.6) {
+                        playerObj.position.y = 1.6;
+                        isLanded = true;
+                        document.getElementById('parachute-prompt').style.display = 'none';
+                    }
+                } else {
+                    const speed = 0.75;
+                    if (keys['KeyW']) playerObj.translateZ(-speed);
+                    if (keys['KeyS']) playerObj.translateZ(speed);
+                    if (keys['KeyA']) playerObj.translateX(-speed);
+                    if (keys['KeyD']) playerObj.translateX(speed);
+
+                    bots.forEach(bot => {
+                        if (bot.alive) {
+                            bot.mesh.translateZ(bot.speed);
+                            if (Math.random() < 0.02) bot.mesh.rotation.y += (Math.random() - 0.5) * 2;
+                        }
+                    });
+
+                    itemsOnGround.forEach(item => {
+                        if (item.mesh.visible) {
+                            if (playerObj.position.distanceTo(item.mesh.position) < 3.5) {
+                                item.mesh.visible = false;
+                                if (item.type === 'armor') armorLevel = item.level;
+                                if (item.type === 'medkit') playerHP = Math.min(300, playerHP + 40);
+                                updateHUD();
+                            }
+                        }
+                    });
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function updateHUD() {
+            document.getElementById('hp-text').innerText = Math.round(playerHP);
+            document.getElementById('hp-fill').style.width = (playerHP / 300 * 100) + '%';
+            document.getElementById('armor-text').innerText = armorLevel > 0 ? `Cấp ${armorLevel} (-${ARMOR_REDUCTION[armorLevel]*100}%)` : 'Không';
+            document.getElementById('armor-fill').style.width = (armorLevel / 4 * 100) + '%';
+        }
+
+        function endGame(isWin) {
+            isGameRunning = false;
+            document.exitPointerLock();
+            document.getElementById('hud').style.display = 'none';
+            const gameOverEl = document.getElementById('game-over');
+            gameOverEl.style.display = 'flex';
+
+            if (isWin) {
+                document.getElementById('game-over-title').innerText = "BOOYAH! #1";
+                document.getElementById('game-over-desc').innerText = "Bạn đã trở thành nhà vô địch!";
+                
+                playerData.currentWins++;
+                let currentRankConfig = RANKS[playerData.rankIndex];
+                if (playerData.currentWins >= currentRankConfig.winsNeeded && playerData.rankIndex < RANKS.length - 1) {
+                    playerData.rankIndex++;
+                    playerData.currentWins = 0;
+                    alert(`CHÚC MỪNG! Bạn đã thăng hạng lên: ${RANKS[playerData.rankIndex].name}`);
+                }
+            } else {
+                document.getElementById('game-over-title').innerText = "THẤT BẠI";
+                document.getElementById('game-over-desc').innerText = "Bạn đã bị hạ gục trên chiến trường!";
+            }
+            updateRankDisplay();
+        }
+
+        function updateRankDisplay() {
+            let r = RANKS[playerData.rankIndex];
+            document.getElementById('rank-display').innerText = `${r.name} (${playerData.currentWins}/${r.winsNeeded === Infinity ? 'MAX' : r.winsNeeded} Thắng)`;
+        }
+
+        function returnToLobby() {
+            document.getElementById('game-over').style.display = 'none';
+            document.getElementById('lobby').style.display = 'flex';
+            createLobbyScene();
+        }
+
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function selectOutfit(name, colorHex) {
+            playerData.selectedOutfit = name;
+            playerData.outfitColor = colorHex;
+            closeModal('outfit-modal');
+            createLobbyScene();
+        }
+
+        function renderWeaponList() {
+            const container = document.getElementById('weapon-list');
+            container.innerHTML = '';
+            WEAPONS_DB.forEach(w => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h4 style="color:#ff4655;">${w.name}</h4>
+                    <p style="font-size:12px; color:#94a3b8; margin-top:4px;">${w.category}</p>
+                    <p style="font-size:13px; margin-top:6px;">Sát thương: ${w.damage} | Tầm: ${w.range}m</p>
+                    <p style="color:#00f0ff; font-size:12px; margin-top:6px;">Sở hữu ${w.skins.length} Skins 3D</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = () => {
+            init3D();
+            renderWeaponList();
+            updateRankDisplay();
+        };
+    </script>
+</body>
+</html>
